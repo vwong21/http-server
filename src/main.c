@@ -45,6 +45,13 @@ int main() {
     }
     printf("Received message: %s\n", buffer);
 
+    const char *response = "Hello from server!";
+    ssize_t bytes_sent = send(new_socket, response, strlen(response), 0);
+    if (bytes_sent == -1) {
+        perror("Send Failed");
+        return 1;
+    }
+
     close(new_socket);
     close(socketfd);
     
