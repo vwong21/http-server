@@ -5,16 +5,39 @@
 #include <unistd.h>
 int main() {
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socketfd == -1) {
+        perror("Socket Failed");
+        return 1;
+    }
+
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
     addr.sin_addr.s_addr = INADDR_ANY;
-    bind(socketfd, (struct sockaddr*) &addr, sizeof(addr));
-    listen(socketfd, 5);
+
+    if (bind(socketfd, (struct sockaddr*) &addr, sizeof(addr)) == -1) {
+        perror("Bind Failed");
+        return 1;
+    }
+
+    if (listen(socketfd, 5) == -1) {
+        perror("Listen Failed");
+        return 1;
+    }
+    printf("Server is listening on port 8080...\n");
+
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     int new_socket = accept(socketfd, (struct sockaddr*) &client_addr, &client_len);
-    printf("new connection accepted\n");
+    if (new_socket == -1) {
+        perror("Accept Failed");
+        return 1;
+    }
+    printf("Connection accepted from client.\n");
+
+    close(new_socket);
+    close(socketfd);
+    
     return 0;
 }
