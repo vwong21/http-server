@@ -36,8 +36,17 @@ int main() {
     }
     printf("Connection accepted from client.\n");
 
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
+    ssize_t bytes_received = read(new_socket, buffer, sizeof(buffer) - 1);
+    if (bytes_received == -1) {
+        perror("Read Failed");
+        return 1;
+    }
+    printf("Received message: %s\n", buffer);
+
     close(new_socket);
     close(socketfd);
     
     return 0;
-}
+}   
