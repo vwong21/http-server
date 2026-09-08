@@ -17,12 +17,12 @@ int main() {
     addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(socketfd, (struct sockaddr*) &addr, sizeof(addr)) == -1) {
-        perror("Bind Failed");
+        perror("Bind Failed\n");
         return 1;
     }
 
     if (listen(socketfd, 5) == -1) {
-        perror("Listen Failed");
+        perror("Listen Failed\n");
         return 1;
     }
     printf("Server is listening on port 8080...\n");
@@ -31,25 +31,32 @@ int main() {
     socklen_t client_len = sizeof(client_addr);
     int new_socket = accept(socketfd, (struct sockaddr*) &client_addr, &client_len);
     if (new_socket == -1) {
-        perror("Accept Failed");
+        perror("Accept Failed\n");
         return 1;
     }
     printf("Connection accepted from client.\n");
 
     char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    ssize_t bytes_received = read(new_socket, buffer, sizeof(buffer) - 1);
-    if (bytes_received == -1) {
-        perror("Read Failed");
-        return 1;
-    }
-    printf("Received message: %s\n", buffer);
+    const char *response = "Message Received\n";
 
-    const char *response = "Hello from server!";
-    ssize_t bytes_sent = send(new_socket, response, strlen(response), 0);
-    if (bytes_sent == -1) {
-        perror("Send Failed");
-        return 1;
+    while (1) {
+        memset(buffer, 0, sizeof(buffer));
+        ssize_t bytes_received = read(new_socket, buffer, sizeof(buffer) - 1);
+        if (bytes_received == -1) {
+            perror("Read Failed\n");
+            break;
+        } if (bytes_received == 0) {
+            printf("Client Disconnected.\n");
+            break;
+        }
+
+        printf("Received message: %s\n", buffer);
+
+        ssize_t bytes_sent = send(new_socket, response, strlen(response), 0);
+        if (bytes_sent == -1) {
+            perror("Send Failed\n");
+            break;
+        }
     }
 
     close(new_socket);
