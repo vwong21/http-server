@@ -21,12 +21,14 @@ int main()
     if (bind(socketfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
         perror("Bind Failed\n");
+        close(socketfd);
         return 1;
     }
 
     if (listen(socketfd, 5) == -1)
     {
         perror("Listen Failed\n");
+        close(socketfd);
         return 1;
     }
     printf("Server is listening on port 8080...\n");
@@ -42,11 +44,12 @@ int main()
     {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
+
         int new_socket = accept(socketfd, (struct sockaddr *)&client_addr, &client_len);
         if (new_socket == -1)
         {
             perror("Accept Failed\n");
-            return 1;
+            continue;
         }
         printf("Connection accepted from client.\n");
 
