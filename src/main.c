@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 int main()
 {
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -20,25 +21,27 @@ int main()
 
     if (bind(socketfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
-        perror("Bind Failed\n");
+        perror("Bind Failed");
         close(socketfd);
         return 1;
     }
 
     if (listen(socketfd, 5) == -1)
     {
-        perror("Listen Failed\n");
+        perror("Listen Failed");
         close(socketfd);
         return 1;
     }
     printf("Server is listening on port 8080...\n");
 
     char buffer[1024];
-    const char *http_response = "HTTP/1.1 200 OK\r\n"
-                                "Content-Type: text/plain\r\n"
-                                "Content-Length: 18\r\n"
-                                "\r\n"
-                                "Hello from server!";
+    char headers[512];
+
+    const char *invalid_response = "HTTP/1.1 404 Not Found\r\n"
+                                   "Content-Type: text/plain\r\n"
+                                   "Content-Length: 15\r\n"
+                                   "\r\n"
+                                   "Page Not Found.";
 
     while (1)
     {
@@ -48,7 +51,7 @@ int main()
         int new_socket = accept(socketfd, (struct sockaddr *)&client_addr, &client_len);
         if (new_socket == -1)
         {
-            perror("Accept Failed\n");
+            perror("Accept Failed");
             continue;
         }
         printf("Connection accepted from client.\n");
@@ -57,7 +60,7 @@ int main()
         ssize_t bytes_received = read(new_socket, buffer, sizeof(buffer) - 1);
         if (bytes_received == -1)
         {
-            perror("Read Failed\n");
+            perror("Read Failed");
             close(new_socket);
             continue;
         }
@@ -91,13 +94,47 @@ int main()
             printf("---------------------------\n\n");
         }
 
-        ssize_t bytes_sent = send(new_socket, http_response, strlen(http_response), 0);
-        if (bytes_sent == -1)
+        char filepath[512];
+
+        if (strcmp(path, "/") == 0)
         {
-            perror("Send Failed\n");
-            close(new_socket);
-            continue;
+            strcpy(filepath, "public/index.html");
         }
+        else
+        {
+            snprintf(filepath, sizeof(filepath), "public%s", path);
+        }
+
+        FILE *fptr;
+
+        fptr = fopen(filepath, "r");
+        if (!fptr)
+        {
+            perror("Path does not exist");
+            ssize_t res = send(new_socket, invalid_response, strlen(invalid_response), 0);
+        }
+        else
+        {
+            fseek(fptr, 0, SEEK_END);
+            long filesize = ftell(fptr);
+            fseek(fptr, 0, SEEK_SET);
+
+            char *file_buffer = malloc(filesize + 1);
+
+            fread(file_buffer, 1, filesize, fptr);
+
+            int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 200 OK\r\n"
+                                                                "Content-Type: text/html\r\n"
+                                                                "Content-Length: %ld\r\n"
+                                                                "\r\n",
+                                      filesize);
+
+            send(new_socket, headers, header_len, 0);
+            send(new_socket, file_buffer, filesize, 0);
+            fclose(fptr);
+            free(file_buffer);
+        }
+
         close(new_socket);
     }
 
