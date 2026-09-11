@@ -36,6 +36,7 @@ int main()
 
     char buffer[1024];
     char headers[512];
+    const char *not_found_fp = "public/notFound.html";
 
     const char *invalid_response = "HTTP/1.1 404 Not Found\r\n"
                                    "Content-Type: text/plain\r\n"
@@ -111,7 +112,30 @@ int main()
         if (!fptr)
         {
             perror("Path does not exist");
-            ssize_t res = send(new_socket, invalid_response, strlen(invalid_response), 0);
+            FILE *not_found_fptr = fopen(not_found_fp, "r");
+            if (!not_found_fptr)
+            {
+                send(new_socket, invalid_response, strlen(invalid_response), 0);
+                close(new_socket);
+                continue;
+            }
+            fseek(not_found_fptr, 0, SEEK_END);
+            long filesize = ftell(not_found_fptr);
+            fseek(not_found_fptr, 0, SEEK_SET);
+
+            char *filebuffer = malloc(filesize + 1);
+
+            fread(filebuffer, 1, filesize, not_found_fptr);
+
+            int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 404 Not Found\r\n"
+                                                                "Content-Type: text/html\r\n"
+                                                                "Content-Length: %ld\r\n"
+                                                                "\r\n",
+                                      filesize);
+            send(new_socket, headers, header_len, 0);
+            send(new_socket, filebuffer, filesize, 0);
+            fclose(not_found_fptr);
+            free(filebuffer);
         }
         else
         {
@@ -122,7 +146,6 @@ int main()
             char *file_buffer = malloc(filesize + 1);
 
             fread(file_buffer, 1, filesize, fptr);
-
             int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 200 OK\r\n"
                                                                 "Content-Type: text/html\r\n"
                                                                 "Content-Length: %ld\r\n"
@@ -134,7 +157,6 @@ int main()
             fclose(fptr);
             free(file_buffer);
         }
-
         close(new_socket);
     }
 
