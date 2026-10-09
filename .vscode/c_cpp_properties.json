@@ -1,14 +1,16 @@
 {
     "configurations": [
         {
-            "name": "Linux",
+            "name": "WSL Ubuntu",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "\\\\wsl.localhost\\Ubuntu\\usr\\include",
+                "\\\\wsl.localhost\\Ubuntu\\usr\\include\\x86_64-linux-gnu",
+                "\\\\wsl.localhost\\Ubuntu\\usr\\lib\\gcc\\x86_64-linux-gnu\\11\\include",
+                "\\\\wsl.localhost\\Ubuntu\\usr\\local\\include"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",
-            "cppStandard": "gnu++17",
             "intelliSenseMode": "linux-gcc-x64"
         }
     ],

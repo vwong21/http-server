@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - --target=x86_64-unknown-linux-gnu
+    - --sysroot=//wsl.localhost/Ubuntu
+    - -isystem
+    - //wsl.localhost/Ubuntu/usr/lib/gcc/x86_64-linux-gnu/11/include
+    - -std=c17

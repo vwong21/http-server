@@ -1,9 +1,127 @@
 #include <stdio.h>
 #include <sys/socket.h>
+#include <stdint.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <pthread.h>
+
+void *handle_request(void *arg) {
+    int client_fd = (int)(intptr_t)arg;
+    char buffer[1024];
+    char headers[512];
+    const char *not_found_fp = "public/notFound.html";
+
+    const char *invalid_response = "HTTP/1.1 404 Not Found\r\n"
+                                   "Content-Type: text/plain\r\n"
+                                   "Content-Length: 15\r\n"
+                                   "\r\n"
+                                   "Page Not Found.";
+    memset(buffer, 0, sizeof(buffer));
+    ssize_t bytes_received = read(client_fd, buffer, sizeof(buffer) - 1);
+    if (bytes_received == -1)
+    {
+        perror("Read Failed");
+        close(client_fd);
+        return NULL;
+    }
+    if (bytes_received == 0)
+    {
+        printf("Client Disconnected.\n");
+        close(client_fd);
+        return NULL;
+    }
+
+    char method[16];
+    char path[256];
+    char version[16];
+
+    memset(method, 0, sizeof(method));
+    memset(path, 0, sizeof(path));
+    memset(version, 0, sizeof(version));
+
+    int fields_parsed = sscanf(buffer, "%15s %255s %15s", method, path, version);
+
+    if (fields_parsed < 3)
+    {
+        printf("Error: Failed to parse a valid HTTP Request Line.\n");
+    }
+    else
+    {
+        printf("\n--- Parsed HTTP Request ---\n");
+        printf("Method: %s\n", method);
+        printf("Path: %s\n", path);
+        printf("Version: %s\n", version);
+        printf("---------------------------\n\n");
+    }
+
+    char filepath[512];
+
+    if (strcmp(path, "/") == 0)
+    {
+        strcpy(filepath, "public/index.html");
+    }
+    else
+    {
+        snprintf(filepath, sizeof(filepath), "public%s", path);
+    }
+
+    FILE *fptr;
+
+    fptr = fopen(filepath, "r");
+    if (!fptr)
+    {
+        perror("Path does not exist");
+        FILE *not_found_fptr = fopen(not_found_fp, "r");
+        if (!not_found_fptr)
+        {
+            send(client_fd, invalid_response, strlen(invalid_response), 0);
+            close(client_fd);
+            return NULL;
+        }
+        fseek(not_found_fptr, 0, SEEK_END);
+        long filesize = ftell(not_found_fptr);
+        fseek(not_found_fptr, 0, SEEK_SET);
+
+        char *filebuffer = malloc(filesize + 1);
+
+        fread(filebuffer, 1, filesize, not_found_fptr);
+
+        int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 404 Not Found\r\n"
+                                                            "Content-Type: text/html\r\n"
+                                                            "Content-Length: %ld\r\n"
+                                                            "\r\n",
+                                    filesize);
+        send(client_fd, headers, header_len, 0);
+        send(client_fd, filebuffer, filesize, 0);
+        fclose(not_found_fptr);
+        free(filebuffer);
+    }
+    else
+    {
+        fseek(fptr, 0, SEEK_END);
+        long filesize = ftell(fptr);
+        fseek(fptr, 0, SEEK_SET);
+
+        char *file_buffer = malloc(filesize + 1);
+
+        fread(file_buffer, 1, filesize, fptr);
+        int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 200 OK\r\n"
+                                                            "Content-Type: text/html\r\n"
+                                                            "Content-Length: %ld\r\n"
+                                                            "\r\n",
+                                    filesize);
+
+        send(client_fd, headers, header_len, 0);
+        send(client_fd, file_buffer, filesize, 0);
+        fclose(fptr);
+        free(file_buffer);
+    }
+    close(client_fd);
+    return NULL;
+};
+
 int main()
 {
     // Create socket with IPv4 and TCP
@@ -40,16 +158,6 @@ int main()
     }
     printf("Server is listening on port 8080...\n");
 
-    char buffer[1024];
-    char headers[512];
-    const char *not_found_fp = "public/notFound.html";
-
-    const char *invalid_response = "HTTP/1.1 404 Not Found\r\n"
-                                   "Content-Type: text/plain\r\n"
-                                   "Content-Length: 15\r\n"
-                                   "\r\n"
-                                   "Page Not Found.";
-
     while (1)
     {
         struct sockaddr_in client_addr;
@@ -63,110 +171,19 @@ int main()
         }
         printf("Connection accepted from client.\n");
 
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t bytes_received = read(new_socket, buffer, sizeof(buffer) - 1);
-        if (bytes_received == -1)
+        pthread_t thread_id;
+        int rc = pthread_create(&thread_id, NULL, handle_request, (void *)(intptr_t)new_socket);
+        if (rc != 0)
         {
-            perror("Read Failed");
+            fprintf(stderr, "pthread_create failed: %d\n", rc);
             close(new_socket);
             continue;
         }
-        if (bytes_received == 0)
-        {
-            printf("Client Disconnected.\n");
-            close(new_socket);
-            continue;
-        }
-
-        char method[16];
-        char path[256];
-        char version[16];
-
-        memset(method, 0, sizeof(method));
-        memset(path, 0, sizeof(path));
-        memset(version, 0, sizeof(version));
-
-        int fields_parsed = sscanf(buffer, "%15s %255s %15s", method, path, version);
-
-        if (fields_parsed < 3)
-        {
-            printf("Error: Failed to parse a valid HTTP Request Line.\n");
-        }
-        else
-        {
-            printf("\n--- Parsed HTTP Request ---\n");
-            printf("Method: %s\n", method);
-            printf("Path: %s\n", path);
-            printf("Version: %s\n", version);
-            printf("---------------------------\n\n");
-        }
-
-        char filepath[512];
-
-        if (strcmp(path, "/") == 0)
-        {
-            strcpy(filepath, "public/index.html");
-        }
-        else
-        {
-            snprintf(filepath, sizeof(filepath), "public%s", path);
-        }
-
-        FILE *fptr;
-
-        fptr = fopen(filepath, "r");
-        if (!fptr)
-        {
-            perror("Path does not exist");
-            FILE *not_found_fptr = fopen(not_found_fp, "r");
-            if (!not_found_fptr)
-            {
-                send(new_socket, invalid_response, strlen(invalid_response), 0);
-                close(new_socket);
-                continue;
-            }
-            fseek(not_found_fptr, 0, SEEK_END);
-            long filesize = ftell(not_found_fptr);
-            fseek(not_found_fptr, 0, SEEK_SET);
-
-            char *filebuffer = malloc(filesize + 1);
-
-            fread(filebuffer, 1, filesize, not_found_fptr);
-
-            int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 404 Not Found\r\n"
-                                                                "Content-Type: text/html\r\n"
-                                                                "Content-Length: %ld\r\n"
-                                                                "\r\n",
-                                      filesize);
-            send(new_socket, headers, header_len, 0);
-            send(new_socket, filebuffer, filesize, 0);
-            fclose(not_found_fptr);
-            free(filebuffer);
-        }
-        else
-        {
-            fseek(fptr, 0, SEEK_END);
-            long filesize = ftell(fptr);
-            fseek(fptr, 0, SEEK_SET);
-
-            char *file_buffer = malloc(filesize + 1);
-
-            fread(file_buffer, 1, filesize, fptr);
-            int header_len = snprintf(headers, sizeof(headers), "HTTP/1.1 200 OK\r\n"
-                                                                "Content-Type: text/html\r\n"
-                                                                "Content-Length: %ld\r\n"
-                                                                "\r\n",
-                                      filesize);
-
-            send(new_socket, headers, header_len, 0);
-            send(new_socket, file_buffer, filesize, 0);
-            fclose(fptr);
-            free(file_buffer);
-        }
-        close(new_socket);
+        pthread_detach(thread_id);
     }
 
     close(socketfd);
 
     return 0;
 }
+
