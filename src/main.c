@@ -6,19 +6,24 @@
 #include <stdlib.h>
 int main()
 {
+    // Create socket with IPv4 and TCP
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    // If socket creation fails, value will be -1
     if (socketfd == -1)
     {
-        perror("Socket Failed");
-        return 1;
+        perror("Socket Failed"); 
+        return 1; // Stop program
     }
 
+    // addr used to store server IPv4 address
     struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(8080);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    memset(&addr, 0, sizeof(addr)); // Set addr values to 0, ensuring no garbage values especially in addr.sin_zero
+    addr.sin_family = AF_INET; // Address family set to IPv4
+    addr.sin_port = htons(8080); // Port set to 8080. Converted to Big Endian
+    addr.sin_addr.s_addr = INADDR_ANY; // Set to listen on every network card on the device
 
+    // Attach socket to ip address and port
     if (bind(socketfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
         perror("Bind Failed");
@@ -26,6 +31,7 @@ int main()
         return 1;
     }
 
+    // Listen on the socket, queueing up to 5 connections
     if (listen(socketfd, 5) == -1)
     {
         perror("Listen Failed");
